@@ -14,7 +14,6 @@ cp -rf TestRename/files_only /scratch/$USER/.
 
 # Go to scratch
 cd /scratch/$USER
-ls -alF
 
 # Load BWA module
 source /opt/asn/etc/asn-bash-profiles/modules.sh
@@ -30,13 +29,6 @@ module load gatk/3.4-46
 
 #Create index of reference genome
 bwa index B_imp.fasta
-# Prepare a .dict index (necessary for GATK)
-java -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/CreateSequenceDictionary.jar \
-        R= B_imp.fasta \
-        O= B_imp.dict
-
-# Prepare a .fai index (necessary for GATK)
-samtools faidx B_imp.fasta
 
 for DIR in ./*
 do
@@ -49,25 +41,24 @@ do
                         # From the input file name, cuts the .fq for the creation of new files
                         FILENAME=$(echo ${FILE##*/} | rev | cut -c 4- | rev)
                         
-                        echo
-                        echo $FILENAME
                         # Align the reads from one library to the genome
                         # -M: Mark multiply aligned files
                         # -t 8: use eight threads
                 
                         bwa mem -M -R '@RG\tID:$DIR\tSM:$FILENAME\tPL:illumina\tLB:$FILENAME' -t 8 -p B_imp.fasta $FILE > aligned-$FILENAME.sam
 
-                        # Convert files from .sam to .bam, sorted
-                        java -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/SortSam.jar \
-                                INPUT=aligned-$FILENAME.sam \
-                                OUTPUT=sorted-$FILENAME.bam \
-                                SORT_ORDER=coordinate 
-                        
+                        # First creates a .bam file and then pipes it to the sort tool
+                        # -bu: -b creates .bam file, -u indicates “don’t compress”- only used because I am $
+                        # new tool
+                        samtools view -bu aligned-$FILENAME.sam -o aligned-$FILENAME.bam
+
+                        #contrary to the manual, fomat for samtools is: samtools sort [input] [output prefix]
+                        samtools sort aligned-$FILENAME.bam sorted_$FILENAME
                         # Indexes the results
                         samtools index sorted_$FILENAME.bam
                         # prints index statistics
                         samtools idxstats sorted_$FILENAME.bam > $FILENAME.bam.stats
-                        #                       
+#                       
                         # Mark duplicates
 #                        java -jar MarkDuplicates.jar \
 #                                INPUT=sorted-$FILENAME.bam \
@@ -79,11 +70,11 @@ do
                         genomeCoverageBed -ibam sorted_$FILENAME.bam -g B_imp.fasta > $FILENAME-BEDcoverage.txt
 
                         #Identify regions in need of realignment:
-                        java -Xmx2g -jar /mnt/homeapps/apps/dmc/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                        java -Xmx2g -jar GenomeAnalysisTK.jar \
                                 -T RealignerTargetCreator \
-                                -R ../B_imp.fasta \
-                                -o sorted_$FILENAME.intervals \
-                                -I sorted_$FILENAME.bam \
+                                -R REFERENCE_ASSEMBLY_NAME.fasta \
+                                -o merged_output.intervals \
+                                -I merged.bam \
                                 --minReadsAtLocus 3
                         #  defaults for optional parameters:
                         #  --minReadsAtLocus N [the minimum coverage at a locus for the entropy calculation to be enabled; default=4]
@@ -93,12 +84,12 @@ do
                         #  --maxIntervalSize [max size in bp of intervals that we'll pass to the realigner; default=500]
 
                         #  Run realigner over intervals:
-                        java -Xmx4g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
-                                -I sorted_$FILENAME.bam \
-                                -R ../B_imp.fasta \
+                        java -Xmx4g -jar ~/programs/GATK/dist/GenomeAnalysisTK.jar \
+                                -I merged.bam \
+                                -R REFERENCE_ASSEMBLY_NAME.fasta \
                                 -T IndelRealigner \
-                                -targetIntervals sorted_$FILENAME.intervals \
-                                -o realigned-$FILENAME.bam \
+                                -targetIntervals merged_output.intervals \
+                                -o merged_realigned.bam \
                                 -LOD 3.0 \
                                 --maxReadsInMemory 1000000 \
                                 --maxReadsForRealignment 100000
@@ -113,29 +104,25 @@ do
                         # -knownsOnly, --useOnlyKnownIndels; Don't run 'Smith-Waterman' to generate alternate consenses; use only known indels provided as RODs for constructing the alternate references. 
 
                         # HaploType caller- SNP variant discovery
-                        java -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                        java -jar GenomeAnalysisTK.jar \
                                 -T HaplotypeCaller \
-                                -R ../B_imp.fasta \
-                                -I realigned-$FILENAME.bam \
+                                -R B_imp.fasta \
+                                -I sorted-$FILENAME.bam \
                                 --genotyping_mode DISCOVERY \
                                 -stand_emit_conf 10 \
                                 -stand_call_conf 30 \
-                                -ERC GVCF \
+                                -emitRefConfidence GVCF
                                 -o $FILENAME-raw_variants.g.vcf
-                        echo 
-                        echo
                 done
                 
 
                 cd ..
-                pwd
 
         fi
-
 done
 
 # Creates a directory on my home directory for the results IF that directory doesn’t exist
 # -p option is what gives it this capability
-mkdir -p /home/$USER/Test/GATK6
+mkdir -p /home/$USER/Test
 # Copies the .bam files to that directory
-cp -rf ./* /home/$USER/Test/GATK6/.
+cp ./* /home/$USER/Test/.
