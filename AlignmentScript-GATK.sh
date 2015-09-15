@@ -5,12 +5,15 @@
 USER=`whoami`
 
 # Create directory on /scratch
-mkdir -p  /scratch/$USER
+# -p option means to only make it if it doesn't exist already
+mkdir -p /scratch/$USER
+# Make sure that the directory is empty
+rm -rf /scratch/$USER/*
 
 # Copy input files to scratch
 cp B.impatiens_genome/B_imp-ncbi.fa /scratch/$USER/.
 mv /scratch/$USER/B_imp-ncbi.fa /scratch/$USER/B_imp.fasta
-cp -rf TestRename/files_only /scratch/$USER/.
+cp -rf TestRename/Run2Test /scratch/$USER/.
 
 # Go to scratch
 cd /scratch/$USER
@@ -49,13 +52,14 @@ do
                         # From the input file name, cuts the .fq for the creation of new files
                         FILENAME=$(echo ${FILE##*/} | rev | cut -c 4- | rev)
                         
-                        echo
+                        echo '---------------------------------'
                         echo $FILENAME
+                        echo
                         # Align the reads from one library to the genome
                         # -M: Mark multiply aligned files
-                        # -t 8: use eight threads
+                        # -t 4: use eight threads
                 
-                        bwa mem -M -R '@RG\tID:$DIR\tSM:$FILENAME\tPL:illumina\tLB:$FILENAME' -t 8 -p B_imp.fasta $FILE > aligned-$FILENAME.sam
+                        bwa mem -M -R '@RG\tID:$DIR\tSM:$FILENAME\tPL:illumina\tLB:$FILENAME' -t 4 -p B_imp.fasta $FILE > aligned-$FILENAME.sam
 
                         # Convert files from .sam to .bam, sorted
                         java -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/SortSam.jar \
@@ -64,9 +68,9 @@ do
                                 SORT_ORDER=coordinate 
                         
                         # Indexes the results
-                        samtools index sorted_$FILENAME.bam
+                        samtools index sorted-$FILENAME.bam
                         # prints index statistics
-                        samtools idxstats sorted_$FILENAME.bam > $FILENAME.bam.stats
+                        samtools idxstats sorted-$FILENAME.bam > $FILENAME.bam.stats
                         #                       
                         # Mark duplicates
 #                        java -jar MarkDuplicates.jar \
@@ -76,14 +80,14 @@ do
 
 
                         # Get information regarding the coverage
-                        genomeCoverageBed -ibam sorted_$FILENAME.bam -g B_imp.fasta > $FILENAME-BEDcoverage.txt
+                        genomeCoverageBed -ibam sorted-$FILENAME.bam -g B_imp.fasta > $FILENAME-BEDcoverage.txt
 
                         #Identify regions in need of realignment:
                         java -Xmx2g -jar /mnt/homeapps/apps/dmc/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
                                 -T RealignerTargetCreator \
                                 -R ../B_imp.fasta \
-                                -o sorted_$FILENAME.intervals \
-                                -I sorted_$FILENAME.bam \
+                                -o sorted-$FILENAME.intervals \
+                                -I sorted-$FILENAME.bam \
                                 --minReadsAtLocus 3
                         #  defaults for optional parameters:
                         #  --minReadsAtLocus N [the minimum coverage at a locus for the entropy calculation to be enabled; default=4]
@@ -94,7 +98,7 @@ do
 
                         #  Run realigner over intervals:
                         java -Xmx4g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
-                                -I sorted_$FILENAME.bam \
+                                -I sorted-$FILENAME.bam \
                                 -R ../B_imp.fasta \
                                 -T IndelRealigner \
                                 -targetIntervals sorted_$FILENAME.intervals \
@@ -134,8 +138,10 @@ do
 
 done
 
+cd /scratch/$USER
 # Creates a directory on my home directory for the results IF that directory doesn’t exist
 # -p option is what gives it this capability
 mkdir -p /home/$USER/Test/GATK6
 # Copies the .bam files to that directory
-cp -rf ./* /home/$USER/Test/GATK6/.
+cp -rf ./* /home/$USER/Test/GATK3.
+rm -rf /scratch/$USER/*
