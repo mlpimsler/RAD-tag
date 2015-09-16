@@ -32,7 +32,7 @@ module load bedtools/2.17.0
 module load gatk/3.4-46
 
 #Create index of reference genome
-bwa index B_imp.fasta
+bwa index -a bwtsw B_imp.fasta
 # Prepare a .dict index (necessary for GATK)
 java -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/CreateSequenceDictionary.jar \
         R= B_imp.fasta \
@@ -57,9 +57,9 @@ do
                         echo
                         # Align the reads from one library to the genome
                         # -M: Mark multiply aligned files
-                        # -t 4: use eight threads
+                        # -t 4: use four threads
                 
-                        bwa mem -M -R '@RG\tID:$DIR\tSM:$FILENAME\tPL:illumina\tLB:$FILENAME' -t 4 -p B_imp.fasta $FILE > aligned-$FILENAME.sam
+                        bwa mem -M -R '@RG\tID:$DIR\tSM:$FILENAME\tPL:illumina\tLB:$FILENAME' -t 4 -p ../B_imp.fasta $FILE > aligned-$FILENAME.sam
 
                         # Convert files from .sam to .bam, sorted
                         java -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/SortSam.jar \
@@ -78,9 +78,8 @@ do
 #                                OUTPUT=dedup-$FILENAME.bam \
 #                                METRICS_FILE=metrics.txt
 
-
                         # Get information regarding the coverage
-                        genomeCoverageBed -ibam sorted-$FILENAME.bam -g B_imp.fasta > $FILENAME-BEDcoverage.txt
+                        genomeCoverageBed -ibam sorted-$FILENAME.bam -g ../B_imp.fasta > $FILENAME-BEDcoverage.txt
 
                         #Identify regions in need of realignment:
                         java -Xmx2g -jar /mnt/homeapps/apps/dmc/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
@@ -101,7 +100,7 @@ do
                                 -I sorted-$FILENAME.bam \
                                 -R ../B_imp.fasta \
                                 -T IndelRealigner \
-                                -targetIntervals sorted_$FILENAME.intervals \
+                                -targetIntervals sorted-$FILENAME.intervals \
                                 -o realigned-$FILENAME.bam \
                                 -LOD 3.0 \
                                 --maxReadsInMemory 1000000 \
@@ -130,18 +129,24 @@ do
                         echo
                 done
                 
+                samtools mpileup -v -q 10 -f ../B_imp.fasta -t DP --output samtools_$DIR.vcf -b realigned-*.bam
+
+                java -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                        -T CombineGVCFs \
+                        -R ../B_imp.fasta \
+                        --variant *-raw_variants.g.vcf \
+                        -o $DIR.g.vcf
 
                 cd ..
                 pwd
-
         fi
-
+        
 done
 
 cd /scratch/$USER
 # Creates a directory on my home directory for the results IF that directory doesn’t exist
 # -p option is what gives it this capability
-mkdir -p /home/$USER/Test/GATK6
+mkdir -p /home/$USER/Test/GATK4
 # Copies the .bam files to that directory
-cp -rf ./* /home/$USER/Test/GATK3.
+cp -rf ./* /home/$USER/Test/GATK_Align/.
 rm -rf /scratch/$USER/*
