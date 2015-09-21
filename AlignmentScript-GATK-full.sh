@@ -13,7 +13,7 @@ rm -rf /scratch/$USER/*
 # Copy input files to scratch
 cp B.impatiens_genome/B_imp-ncbi.fa /scratch/$USER/.
 mv /scratch/$USER/B_imp-ncbi.fa /scratch/$USER/B_imp.fasta
-cp -rf TestRename/Run2Test /scratch/$USER/.
+cp -rf C3* /scratch/$USER/.
 
 # Go to scratch
 cd /scratch/$USER
@@ -34,19 +34,26 @@ module load gatk/3.4-46
 #Create index of reference genome
 bwa index -a bwtsw B_imp.fasta
 # Prepare a .dict index (necessary for GATK)
-java -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/CreateSequenceDictionary.jar \
+java -Xmx16g -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/CreateSequenceDictionary.jar \
         R= B_imp.fasta \
         O= B_imp.dict
 
 # Prepare a .fai index (necessary for GATK)
 samtools faidx B_imp.fasta
 
+# Cycle through each directory
+# Each directory should contain the pre-renamed split files, one lane per directory
+# Use the renamed_split_files.py python script for this
 for DIR in ./*
 do
+        # if the * wildcard is actually a directory
         if [ -d "$DIR" ]
                 then
+                # Print the directory
                 echo $(basename "$DIR")
+                # go "into" the directory
                 cd $DIR
+                # Cycle through each file in the directory that has a .fq ending
                 for FILE in *.fq
                         do
                         # From the input file name, cuts the .fq for the creation of new files
@@ -62,7 +69,7 @@ do
                         bwa mem -M -R '@RG\tID:$DIR\tSM:$FILENAME\tPL:illumina\tLB:$FILENAME' -t 4 -p ../B_imp.fasta $FILE > aligned-$FILENAME.sam
 
                         # Convert files from .sam to .bam, sorted
-                        java -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/SortSam.jar \
+                        java -Xmx16g -jar /opt/asn/apps/picard_1.79/picard-tools-1.79/SortSam.jar \
                                 INPUT=aligned-$FILENAME.sam \
                                 OUTPUT=sorted-$FILENAME.bam \
                                 SORT_ORDER=coordinate 
@@ -82,7 +89,7 @@ do
                         genomeCoverageBed -ibam sorted-$FILENAME.bam -g ../B_imp.fasta > $FILENAME-BEDcoverage.txt
 
                         #Identify regions in need of realignment:
-                        java -Xmx2g -jar /mnt/homeapps/apps/dmc/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                        java -Xmx16g -jar /mnt/homeapps/apps/dmc/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
                                 -T RealignerTargetCreator \
                                 -R ../B_imp.fasta \
                                 -o sorted-$FILENAME.intervals \
@@ -96,7 +103,7 @@ do
                         #  --maxIntervalSize [max size in bp of intervals that we'll pass to the realigner; default=500]
 
                         #  Run realigner over intervals:
-                        java -Xmx4g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                        java -Xmx16g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
                                 -I sorted-$FILENAME.bam \
                                 -R ../B_imp.fasta \
                                 -T IndelRealigner \
@@ -116,7 +123,7 @@ do
                         # -knownsOnly, --useOnlyKnownIndels; Don't run 'Smith-Waterman' to generate alternate consenses; use only known indels provided as RODs for constructing the alternate references. 
 
                         # HaploType caller- SNP variant discovery
-                        java -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                        java -Xmx16g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
                                 -T HaplotypeCaller \
                                 -R ../B_imp.fasta \
                                 -I realigned-$FILENAME.bam \
@@ -129,30 +136,36 @@ do
                         echo 
                         echo
                 done
-                
+                # End of the loop through the files in the directory
+
+                echo "************************************"
+                pwd
+                echo "ls realigned-*.bam > bam_files.list"
                 ## Samtools variant calling
                 # First need to create a list of input files
-                \ls realigned-*.bam > bam_files.list
+                \ls realigned-*.bam > $(basename "$DIR")_bam_files.list
+                more bam_files.list
+                echo "samtools mpileup"
                 # calling mpileup to make the .vcf file
-                samtools mpileup -v -q 10 -f ../B_imp.fasta -t DP --output samtools_$DIR.vcf -b bam_files.list
+                samtools mpileup -v -q 10 -f ../B_imp.fasta -t DP --output samtools_$(basename "$DIR").vcf -b $(basename "$DIR")_bam_files.list
 
                 # GATK variant calling 
                 # First need to create a list of input files as a .list to pass to GATK
-                \ls raw_variants-*.g.vcf > gvcf.list      
+                \ls raw_variants-*.g.vcf > $(basename "$DIR")_gvcf.list      
                 #Combine g.vcf files          
-                java -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                java -Xmx16g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
                         -T CombineGVCFs \
                         -R ../B_imp.fasta \
-                        -drf DuplicateRead \ 
-                        -V gvcf.list \
-                        -o $DIR_combined.g.vcf
+                        -drf DuplicateRead \
+                        -V $(basename "$DIR")_gvcf.list \
+                        -o $(basename "$DIR")_combined.g.vcf
                 
                 # genotyping/SNP calling
-                java -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+                java -Xmx16g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
                         -T GenotypeGVCFs \
-                        -R B_imp.fasta \
-                        -V $DIR_combined.g.vcf \
-                        -o $DIR_combined.vcf
+                        -R ../B_imp.fasta \
+                        -V $(basename "$DIR")_combined.g.vcf \
+                        -o $(basename "$DIR")_combined.vcf
                 cd ..
                 pwd
         else
@@ -165,14 +178,14 @@ do
 done
 
 for f in */realigned-*.bam; do [[ -d "$f" ]] || echo "$f"; done > all_bam_files.list
-samtools mpileup -v -q 10 -f ../B_imp.fasta -t DP --output samtools_AllLibraries.vcf -b all_bam_files.list
+samtools mpileup -v -q 10 -f B_imp.fasta -t DP --output samtools_AllLibraries.vcf -b all_bam_files.list
 
 for f in */*combined.g.vcf; do [[ -d "$f" ]] || echo "$f"; done > all_gvcf_files.list
-java -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
+java -Xmx16g -jar /opt/asn/apps/gatk_3.4-46/GenomeAnalysisTK.jar \
         -T GenotypeGVCFs \
         -R B_imp.fasta \
         -V all_gvcf_files.list \
-        -o combined.vcf
+        -o all_combined.vcf
 
 cd /scratch/$USER
 # Creates a directory on my home directory for the results IF that directory doesn’t exist
