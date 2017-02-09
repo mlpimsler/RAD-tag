@@ -142,47 +142,52 @@ do
 
                         ### Realignment using GATK
                         #Identify regions in need of realignment:
-                        java -jar -Xmx160G $JARFILES/GenomeAnalysisTK.jar \
-                                -T RealignerTargetCreator \
-                                -R ~/B_imp_bwa/B_imp.fasta \
-                                -o ${FILENAME}.intervals \
-                                -I $FILE \
-                                --minReadsAtLocus 3
                         #  defaults for optional parameters:
                         #  --minReadsAtLocus N [the minimum coverage at a locus for the entropy calculation to be enabled; default=4]
-                        #  --windowSize N [any two SNP calls and/or high entropy positions are considered clustered when they occur no more than N basepairs apart; default=10]
-                        #  --mismatchFraction f [fraction of total sum of base qualities at a position that need to mismatch for the position to be considered to have high entropy; default=0.15; to disable, set to <= 0 or > 1]
-                        #  Note that this fraction should be adjusted based on your particular data set. For deep coverage and/or when looking for indels with low allele frequency, this number should be smaller.
+                        #  --windowSize N [any two SNP calls and/or high entropy positions are considered clustered when they occur no 
+                        #       more than N basepairs apart; default=10]
+                        #  --mismatchFraction f [fraction of total sum of base qualities at a position that need to mismatch for the 
+                        #       position to be considered to have high entropy; default=0.15; to disable, set to <= 0 or > 1]
+                        #       Note that this fraction should be adjusted based on your particular data set. For deep coverage and/or 
+                        #       when looking for indels with low allele frequency, this number should be smaller.
                         #  --maxIntervalSize [max size in bp of intervals that we'll pass to the realigner; default=500]
+                        java -jar -Xmx160G $JARFILES/GenomeAnalysisTK.jar \
+                                -T RealignerTargetCreator \
+                                -R $REFERENCE_SEQ \
+                                -o /grps1/jlozier/$USER/Alignments/GSNAP/RealignBAM/Intervals/$(basename "$DIR")/${FILENAME}.intervals \
+                                -I sorted-${FILENAME}.bam \
+                                --minReadsAtLocus 3
 
                         #  Run realigner over intervals:
+                        # Optional parameters:
+                        # -compress 0: this argument recommended to speed up the process *if* this is only a temporary file; 
+                        #       otherwise, use the default value defaults for optional parameters:
+                        # -compress, --bam_compression; Compression level to use for output bams; [default:5].
+                        # -LOD, --LODThresholdForCleaning; LOD threshold above which the realigner will proceed to realign; default=5.0]
+                        #       This term is equivalent to "significance" - i.e. is the improvement significant enough to merit realignment? 
+                        #       Note that this number should be adjusted based on your particular data set. For low coverage and/or when 
+                        #       looking for indels with low allele frequency, this number should be smaller.
+                        # -targetNotSorted, --targetIntervalsAreNotSorted; This tool assumes that the target interval list is sorted; 
+                        #       if the list turns out to be unsorted, it will throw an exception. Use this argument when your interval 
+                        #       list is not sorted to instruct the Realigner to first sort it in memory.
+                        # -knownsOnly, --useOnlyKnownIndels; Don't run 'Smith-Waterman' to generate alternate consenses; 
+                        #       use only known indels provided as RODs for constructing the alternate references. 
+
                         java -jar -Xmx160G $JARFILES/GenomeAnalysisTK.jar \
-                                -I $FILE \
-                                -R ~/B_imp_bwa/B_imp.fasta \
+                                -I sorted-${FILENAME}.bam \
+                                -R $REFERENCE_SEQ \
                                 -T IndelRealigner \
-                                -targetIntervals ${FILENAME}.intervals \
-                                -o realigned-${FILENAME}.bam \
+                                -targetIntervals /grps1/jlozier/$USER/Alignments/GSNAP/RealignBAM/Intervals/$(basename "$DIR")/${FILENAME}.intervals \
+                                -o /grps1/jlozier/$USER/Alignments/GSNAP/RealignBAM/$(basename "$DIR")/realigned-${FILENAME}.bam \
                                 -LOD 3.0 \
                                 --maxReadsInMemory 1000000 \
                                 --maxReadsForRealignment 100000
-                        #Optional parameters:
-                        # -compress 0 \
-                        #    this argument recommended to speed up the process *if* this is only a temporary file; otherwise, use the default value
-                        #    defaults for optional parameters:
-                        # -compress, --bam_compression; Compression level to use for output bams; [default:5].
-                        # -LOD, --LODThresholdForCleaning; LOD threshold above which the realigner will proceed to realign; default=5.0]
-                        #    This term is equivalent to "significance" - i.e. is the improvement significant enough to merit realignment? Note that this number should be adjusted based on your particular data set. For low coverage and/or when looking for indels with low allele frequency, this number should be smaller.
-                        # -targetNotSorted, --targetIntervalsAreNotSorted; This tool assumes that the target interval list is sorted; if the list turns out to be unsorted, it will throw an exception. Use this argument when your interval list is not sorted to instruct the Realigner to first sort it in memory.
-                        # -knownsOnly, --useOnlyKnownIndels; Don't run 'Smith-Waterman' to generate alternate consenses; use only known indels provided as RODs for constructing the alternate references. 
-
                 done
                 # End of the loop through the files in the directory
                 
                 ## Move files to their appropriate destinations
                 mv *.sam /grps1/jlozier/$USER/Alignments/GSNAP/SAM/$(basename "$DIR")/.
                 mv *.html /grps1/jlozier/$USER/Alignments/GSNAP/SamStat/$(basename "$DIR")/.
-                mv realigned* /grps1/jlozier/$USER/Alignments/GSNAP/RealignBAM/$(basename "$DIR")/.
-                mv *.intervals /grps1/jlozier/$USER/Alignments/GSNAP/RealignBAM/Intervals/$(basename "$DIR")/.
                 mv *.bam /grps1/jlozier/$USER/Alignments/GSNAP/BAM/$(basename "$DIR")/.
                 mv *.bai /grps1/jlozier/$USER/Alignments/GSNAP/BAM/$(basename "$DIR")/.
                 mv *.stats /grps1/jlozier/$USER/Alignments/GSNAP/BamStat/$(basename "$DIR")/.
