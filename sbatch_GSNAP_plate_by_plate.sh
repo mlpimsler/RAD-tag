@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=GSNAP_workflow
 #SBATCH -n 1
+#SBATCH -c 8
 #SBATCH -p owners
 #SBATCH --qos jlozier
 #SBATCH --error=error.GSNAP_workflow.%J.txt
@@ -43,6 +44,9 @@ use bioinfoJava
 use bioinfoGCC
 # Need to use a specific JAVA in order to use GATK
 use java1.8.0
+
+# Create variable that points to the reference genome
+REFERENCE_DIR=/grps1/jlozier/mlpimsler/B_imp_genome
 
 for DIR in /grps1/jlozier/mlpimsler/SplitRenamed/C*
 do
@@ -89,11 +93,11 @@ do
                         # -m, --max-mismatches=FLOAT{int}: maximum number of mismatches
                         # -i, --indel-penalty=INT: Counts against mismatches allowed.  To find indels, make
                         #          indel-penalty less than or equal to max-mismatches. A value < 2 can lead to false positives at read ends
-                        gsnap -t 1 -n 1 --quiet-if-excessive --use-sarray=0 \
+                        gsnap -t 8 -n 1 --quiet-if-excessive --use-sarray=0 \
                                 --failed-input=/grps1/jlozier/$USER/Alignments/GSNAP/UnMapped/unmapped-$FILENAME \
                                 --split-output=/grps1/jlozier/$USER/Alignments/GSNAP/aligned-${FILENAME} \
                                 --min-coverage=1.0 -A sam -m 5 -i 2 \
-                                -D ~/B_imp_genome -d B_imp \
+                                -D $REFERENCE_DIR -d B_imp \
                                 --read-group-id="${RUN}" \
                                 --read-group-name="${FILENAME}" \
                                 --read-group-library="${FILENAME}" \
@@ -116,6 +120,10 @@ do
                                 /grps1/jlozier/$USER/Alignments/GSNAP/UnMapped/$(basename "$DIR")/unmapped-${FILENAME}.1.fastq
                         mv /grps1/jlozier/$USER/Alignments/GSNAP/unmapped-${FILENAME}.2 \
                                 /grps1/jlozier/$USER/Alignments/GSNAP/UnMapped/$(basename "$DIR")/unmapped-${FILENAME}.2.fastq
+
+                        # Compress the unmapped reads
+                        gzip /grps1/jlozier/$USER/Alignments/GSNAP/UnMapped/$(basename "$DIR")/unmapped-${FILENAME}.1.fastq
+                        gzip /grps1/jlozier/$USER/Alignments/GSNAP/UnMapped/$(basename "$DIR")/unmapped-${FILENAME}.2.fastq
 
                         cd /grps1/jlozier/$USER/Alignments/GSNAP
 
@@ -179,7 +187,7 @@ do
                 mv *.bam /grps1/jlozier/$USER/Alignments/GSNAP/BAM/$(basename "$DIR")/.
                 mv *.bai /grps1/jlozier/$USER/Alignments/GSNAP/BAM/$(basename "$DIR")/.
                 mv *.stats /grps1/jlozier/$USER/Alignments/GSNAP/BamStat/$(basename "$DIR")/.
-                
+
                 cd ..
                 echo "************************************"
 

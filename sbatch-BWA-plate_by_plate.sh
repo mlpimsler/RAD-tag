@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=BWA_alignmment
 #SBATCH -n 1
+#SBATCH -c 8
 #SBATCH -p owners
 #SBATCH --qos jlozier
 #SBATCH --error=error.BWA_alignmment.%J.txt
@@ -82,7 +83,7 @@ do
                         # -M: Mark multiply aligned files
                         # -t 4: use four threads
                         bwa mem -R "@RG\tID:${RUN}\tSM:${FILENAME}\tPL:illumina\tLB:${FILENAME}" \
-                        -t 4 -p $REFERENCE_SEQ $FILE > aligned-$FILENAME.sam
+                                -t 8 -p $REFERENCE_SEQ $FILE > aligned-$FILENAME.sam
                         
                         # Calculate summary statistics about the alignments
                         samstat aligned-$FILENAME.sam  
