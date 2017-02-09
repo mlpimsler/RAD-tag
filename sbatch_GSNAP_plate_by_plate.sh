@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=GSNAP_workflow
 #SBATCH -n 1
-#SBATCH -c 8
 #SBATCH -p owners
 #SBATCH --qos jlozier
 #SBATCH --error=error.GSNAP_workflow.%J.txt
@@ -93,7 +92,7 @@ do
                         # -m, --max-mismatches=FLOAT{int}: maximum number of mismatches
                         # -i, --indel-penalty=INT: Counts against mismatches allowed.  To find indels, make
                         #          indel-penalty less than or equal to max-mismatches. A value < 2 can lead to false positives at read ends
-                        gsnap -t 8 -n 1 --quiet-if-excessive --use-sarray=0 \
+                        gsnap -t 1 -n 1 --quiet-if-excessive --use-sarray=0 \
                                 --failed-input=/grps1/jlozier/$USER/Alignments/GSNAP/UnMapped/unmapped-$FILENAME \
                                 --split-output=/grps1/jlozier/$USER/Alignments/GSNAP/aligned-${FILENAME} \
                                 --min-coverage=1.0 -A sam -m 5 -i 2 \
