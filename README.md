@@ -4,8 +4,8 @@ It will include scripts and programs for the bioinformatics of RAD-tag data anal
 Hopefully this will include generalized programs.
 
 # Rename_split_files.py
-This script needs a .csv file with two columns (barcodes in first, sample ID in second) and all of the files created from the 'process_radtags' command and changes the names of all of the files in the directory to the names provided in the 'sample id' column.
-If it does not work because of the .csv file, it might mean that you saved it in the wrong format- if you are working on a Mac you should have saved the file as windows version .csv
+This script needs a .csv file with two columns (barcodes in first, sample ID in second) and all of the files created from the 'process_radtags' command in Stacks (available at: http://catchenlab.life.illinois.edu/stacks/) and changes the names of all of the files in the directory to the names provided in the 'sample id' column.
+If it does not work because of the .csv file, it might mean that you saved your .csv in the wrong format- if you are working on a Mac you should have saved the file as windows version .csv
 
 # sbatch-BWA-plate_by_plate.sh
 This script is set up for submission to the University of Alabama High Performance Computing Cluster. It assumes that your RADtag fastq files have already been split, trimmed, and filtered with Stacks and are in plate-specific directories. These plate-specific directories are important for the read group information that GATK and samtools (can) make use of in the variant calling steps. The script will first cycle through the directories, then through each fastq file, and do the following steps:
